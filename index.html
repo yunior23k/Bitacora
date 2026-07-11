@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Bitácora de Apuestas</title>
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<meta name="theme-color" content="#0B0F14">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-192.png') }}">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B0F14;
+    --panel: #151B23;
+    --panel2: #11161D;
+    --line: #232B36;
+    --text: #EDEAE2;
+    --muted: #7A8593;
+    --green: #16C784;
+    --green2: #3FBE7A;
+    --red: #C24B3E;
+    --gold: #D4A94F;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .display { font-family: 'Space Grotesk', sans-serif; }
+  .mono { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+  .wrap { max-width: 460px; margin: 0 auto; padding: 24px 16px 100px; }
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  .brand { display: flex; align-items: center; gap: 8px; }
+  .brand .icon { width: 32px; height: 32px; border-radius: 8px; background: rgba(22,199,132,0.1); display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .brand h1 { font-size: 16px; font-weight: 700; margin: 0; }
+  .gear { width: 36px; height: 36px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); color: var(--muted); display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+  .card { position: relative; border-radius: 16px; background: linear-gradient(to bottom, var(--panel), var(--panel2)); border: 1px solid var(--line); overflow: hidden; margin-bottom: 16px; box-shadow: 0 10px 24px rgba(0,0,0,0.25); }
+  .card-top { padding: 20px 20px 16px; }
+  .label-sm { font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em; color: var(--muted); }
+  .bank-amt { font-size: 2.5rem; line-height: 1; font-weight: 700; margin-top: 6px; }
+  .bank-delta { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 12px; }
+  .perf { position: relative; height: 0; border-top: 1px dashed var(--line); }
+  .perf::before, .perf::after { content: ''; position: absolute; top: -8px; width: 16px; height: 16px; border-radius: 999px; background: var(--bg); }
+  .perf::before { left: -8px; } .perf::after { right: -8px; }
+  .stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .stat-grid > div { padding: 12px 6px; text-align: center; border-left: 1px solid var(--line); }
+  .stat-grid > div:first-child { border-left: none; }
+  .stat-label { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .stat-val { font-size: 13px; margin-top: 3px; }
+
+  .tabs { display: inline-flex; gap: 4px; background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; padding: 4px; margin-bottom: 16px; }
+  .tab { border: none; background: transparent; color: var(--muted); font-size: 12px; padding: 6px 14px; border-radius: 999px; cursor: pointer; display: flex; align-items: center; gap: 5px; }
+  .tab.active { background: var(--green); color: var(--bg); font-weight: 500; }
+
+  .chip-row { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 16px; }
+  .chip { flex-shrink: 0; font-size: 12px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); background: transparent; cursor: pointer; white-space: nowrap; }
+  .chip.active { background: var(--gold); color: var(--bg); border-color: var(--gold); font-weight: 500; }
+
+  .bet-item { border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); padding: 14px; margin-bottom: 8px; }
+  .bet-top { display: flex; justify-content: space-between; gap: 8px; }
+  .bet-tags { display: flex; align-items: center; gap: 6px; }
+  .bet-sport { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--gold); font-weight: 600; }
+  .bet-date { font-size: 10px; color: var(--muted); }
+  .bet-matchup { font-size: 14px; font-weight: 500; margin-top: 2px; }
+  .bet-pick { font-size: 12px; color: var(--muted); }
+  .bet-bottom { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+  .bet-meta { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+  .del-btn { background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px; }
+  select.status-select { font-size: 11px; border-radius: 999px; padding: 4px 10px; background: transparent; outline: none; cursor: pointer; }
+
+  .empty { text-align: center; padding: 40px 0; color: var(--muted); font-size: 14px; border: 1px dashed var(--line); border-radius: 12px; }
+
+  .fab { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); width: 56px; height: 56px; border-radius: 999px; background: var(--green); color: var(--bg); border: none; font-size: 26px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 8px 20px rgba(22,199,132,0.3); z-index: 40; }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 50; display: none; align-items: flex-end; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal-overlay.center { align-items: center; padding: 16px; }
+  .modal { background: var(--panel); width: 100%; max-width: 460px; border-radius: 20px 20px 0 0; padding: 20px; max-height: 85vh; overflow-y: auto; }
+  .modal-overlay.center .modal { border-radius: 16px; }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .modal-head h2 { font-size: 16px; margin: 0; font-weight: 700; }
+  .close-x { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
+
+  .field { margin-bottom: 12px; }
+  .field label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); display: block; margin-bottom: 4px; }
+  .field input, .field select {
+    width: 100%; background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 12px; font-size: 14px; color: var(--text); outline: none;
+  }
+  .field input:focus, .field select:focus { border-color: var(--green); }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .btn-primary { width: 100%; background: var(--green); color: var(--bg); font-weight: 500; border: none; border-radius: 10px; padding: 13px; font-size: 14px; cursor: pointer; margin-top: 6px; }
+  .stakemode { display: flex; gap: 4px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 2px; }
+  .stakemode button { font-size: 10px; padding: 5px 10px; border-radius: 999px; border: none; background: transparent; color: var(--muted); cursor: pointer; }
+  .stakemode button.active { background: var(--green); color: var(--bg); }
+  .hint { font-size: 10px; color: var(--muted); margin-top: 5px; }
+  .err-box { background: rgba(194,75,62,0.1); border: 1px solid rgba(194,75,62,0.4); color: var(--red); font-size: 12px; padding: 10px 12px; border-radius: 10px; margin-bottom: 12px; }
+
+  .unitpct-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px; }
+  .unitpct-grid button { font-family: 'IBM Plex Mono', monospace; font-size: 14px; padding: 9px 0; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); cursor: pointer; }
+  .unitpct-grid button.active { background: var(--green); color: var(--bg); border-color: var(--green); font-weight: 500; }
+
+  #chartWrap { background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  #chartWrap .chart-label { font-size: 12px; color: var(--muted); margin-bottom: 10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="brand">
+      <div class="icon">🎟️</div>
+      <h1 class="display">Bitácora</h1>
+    </div>
+    <button class="gear" onclick="openSettings()">⚙️</button>
+  </div>
+
+  <div class="card">
+    <div class="card-top">
+      <span class="label-sm">Banca actual</span>
+      <div id="bankAmt" class="bank-amt mono">$0</div>
+      <div class="bank-delta mono">
+        <span id="bankDelta"></span>
+      </div>
+    </div>
+    <div class="perf"></div>
+    <div class="stat-grid">
+      <div><div class="stat-label">ROI</div><div id="statRoi" class="stat-val mono">0%</div></div>
+      <div><div class="stat-label">Aciertos</div><div id="statWinrate" class="stat-val mono">0%</div></div>
+      <div><div class="stat-label">En juego</div><div id="statPending" class="stat-val mono" style="color:var(--gold)">$0</div></div>
+      <div><div class="stat-label">1 unidad</div><div id="statUnit" class="stat-val mono">$0</div></div>
+    </div>
+  </div>
+
+  <div id="settingsErrorBanner"></div>
+
+  <div class="tabs">
+    <button class="tab active" id="tabLog" onclick="switchTab('log')">📋 Registro</button>
+    <button class="tab" id="tabChart" onclick="switchTab('chart')">📈 Gráfica</button>
+  </div>
+
+  <div id="logView">
+    <div class="chip-row" id="sportChips"></div>
+    <div id="betList"></div>
+  </div>
+
+  <div id="chartView" style="display:none">
+    <div id="chartWrap">
+      <div class="chart-label">Evolución de banca (apuestas liquidadas)</div>
+      <canvas id="bankChart" height="220"></canvas>
+    </div>
+  </div>
+</div>
+
+<button class="fab" onclick="openForm()">+</button>
+
+<!-- Add bet modal -->
+<div class="modal-overlay" id="formOverlay" onclick="closeIfOverlay(event,'formOverlay')">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 class="display">Nueva apuesta</h2>
+      <button class="close-x" onclick="closeForm()">✕</button>
+    </div>
+    <div id="formError"></div>
+    <form id="betForm" onsubmit="submitBet(event)">
+      <div class="row2">
+        <div class="field"><label>Fecha</label><input type="date" id="f_date" required></div>
+        <div class="field"><label>Deporte</label>
+          <select id="f_sport">
+            <option>MLB</option><option>Wimbledon</option><option>Mundial 2026</option><option>NBA</option><option>Otro</option>
+          </select>
+        </div>
+      </div>
+      <div class="field"><label>Partido</label><input id="f_matchup" placeholder="Cubs @ Reds" required></div>
+      <div class="field"><label>Pick</label><input id="f_pick" placeholder="Reds ML" required></div>
+      <div class="field"><label>Momio (americano)</label><input id="f_odds" type="number" placeholder="-130" required></div>
+      <div class="field">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <label style="margin:0">Tamaño de apuesta</label>
+          <div class="stakemode">
+            <button type="button" id="mode_mxn" class="active" onclick="setStakeMode('mxn')">MXN</button>
+            <button type="button" id="mode_units" onclick="setStakeMode('units')">Unidades</button>
+          </div>
+        </div>
+        <input id="f_stake" type="number" placeholder="500" style="margin-top:6px">
+        <input id="f_units" type="number" step="0.1" placeholder="1.5" style="margin-top:6px; display:none">
+        <div class="hint" id="unitsHint"></div>
+      </div>
+      <div class="field"><label>Nota (opcional)</label><input id="f_note" placeholder="EV +12%, muestra grande"></div>
+      <button type="submit" class="btn-primary">Guardar apuesta</button>
+    </form>
+  </div>
+</div>
+
+<!-- Settings modal -->
+<div class="modal-overlay center" id="settingsOverlay" onclick="closeIfOverlay(event,'settingsOverlay')">
+  <div class="modal">
+    <div class="modal-head">
+      <h2 class="display">Configuración</h2>
+      <button class="close-x" onclick="closeSettings()">✕</button>
+    </div>
+    <div id="settingsError"></div>
+    <form onsubmit="submitSettings(event)">
+      <div class="field"><label>Banca inicial (MXN)</label><input id="s_initial" type="text" inputmode="decimal" placeholder="10000"></div>
+      <div class="field">
+        <label>Tamaño de unidad (% de banca)</label>
+        <div class="unitpct-grid" id="unitPctGrid"></div>
+        <div class="hint">Conservador (2-4%) para picks normales, agresivo (8-15%) solo para ventajas muy sólidas y verificadas.</div>
+      </div>
+      <button type="submit" class="btn-primary">Guardar</button>
+    </form>
+  </div>
+</div>
+
+<script>
+const SPORTS = ['MLB','Wimbledon','Mundial 2026','NBA','Otro'];
+const UNIT_OPTIONS = [2,4,6,8,10,12,15];
+const STATUS = {
+  pending: { label: 'Pendiente', color: '#D4A94F' },
+  win: { label: 'Ganada', color: '#3FBE7A' },
+  loss: { label: 'Perdida', color: '#C24B3E' },
+  push: { label: 'Push', color: '#7A8593' },
+};
+
+let state = { config: null, bets: [], filterSport: 'Todos', stakeMode: 'mxn', chart: null };
+
+function fmtMXN(n, decimals=0) {
+  const sign = n < 0 ? '-' : '';
+  return sign + '$' + Math.abs(n).toLocaleString('es-MX', {minimumFractionDigits: decimals, maximumFractionDigits: decimals});
+}
+function americanToProfit(odds, stake) {
+  const o = Number(odds);
+  return o > 0 ? stake * (o/100) : stake * (100/Math.abs(o));
+}
+
+async function loadAll() {
+  const [cfgRes, betsRes] = await Promise.all([fetch('/api/config'), fetch('/api/bets')]);
+  state.config = await cfgRes.json();
+  state.bets = await betsRes.json();
+  document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
+  renderChips();
+  renderAll();
+}
+
+function renderChips() {
+  const wrap = document.getElementById('sportChips');
+  wrap.innerHTML = '';
+  ['Todos', ...SPORTS].forEach(s => {
+    const b = document.createElement('button');
+    b.className = 'chip' + (state.filterSport === s ? ' active' : '');
+    b.textContent = s;
+    b.onclick = () => { state.filterSport = s; renderChips(); renderList(); };
+    wrap.appendChild(b);
+  });
+}
+
+async function renderAll() {
+  const statsRes = await fetch('/api/stats');
+  const s = await statsRes.json();
+  document.getElementById('bankAmt').textContent = fmtMXN(s.current_bank);
+  document.getElementById('bankAmt').style.color = s.current_bank >= s.initial ? '#3FBE7A' : '#C24B3E';
+  const delta = s.profit >= 0 ? '+' + fmtMXN(s.profit) : fmtMXN(s.profit);
+  document.getElementById('bankDelta').innerHTML =
+    `<span style="color:${s.profit>=0?'#3FBE7A':'#C24B3E'}">${s.profit>=0?'▲':'▼'} ${delta}</span> <span style="color:var(--muted)">· inicio ${fmtMXN(s.initial)}</span>`;
+  document.getElementById('statRoi').textContent = s.roi.toFixed(1) + '%';
+  document.getElementById('statRoi').style.color = s.roi >= 0 ? '#3FBE7A' : '#C24B3E';
+  document.getElementById('statWinrate').textContent = s.win_rate.toFixed(0) + '%';
+  document.getElementById('statPending').textContent = fmtMXN(s.pending);
+  document.getElementById('statUnit').textContent = fmtMXN(s.unit_value);
+  state.unitValue = s.unit_value;
+  renderList();
+  renderChart(s.initial);
+}
+
+function renderList() {
+  const wrap = document.getElementById('betList');
+  const filtered = state.filterSport === 'Todos' ? state.bets : state.bets.filter(b => b.sport === state.filterSport);
+  wrap.innerHTML = '';
+  if (filtered.length === 0) {
+    wrap.innerHTML = '<div class="empty">Sin apuestas registradas todavía.</div>';
+    return;
+  }
+  filtered.forEach(b => {
+    const profit = b.status === 'win' ? americanToProfit(b.odds, b.stake) : b.status === 'loss' ? -b.stake : 0;
+    const st = STATUS[b.status];
+    const div = document.createElement('div');
+    div.className = 'bet-item';
+    div.innerHTML = `
+      <div class="bet-top">
+        <div style="min-width:0">
+          <div class="bet-tags"><span class="bet-sport">${b.sport}</span><span class="bet-date mono">${b.date}</span></div>
+          <div class="bet-matchup">${b.matchup}</div>
+          <div class="bet-pick">${b.pick}</div>
+        </div>
+        <button class="del-btn" onclick="deleteBet(${b.id})">🗑</button>
+      </div>
+      <div class="bet-bottom">
+        <div class="bet-meta mono">
+          <span>${b.odds > 0 ? '+'+b.odds : b.odds}</span>
+          <span>${fmtMXN(b.stake)}</span>
+          ${b.units != null ? `<span style="color:var(--gold)">${b.units}u</span>` : ''}
+          ${b.status !== 'pending' ? `<span style="color:${profit>=0?'#3FBE7A':'#C24B3E'}">${profit>=0?'+':''}${fmtMXN(profit)}</span>` : ''}
+        </div>
+        <select class="status-select mono" style="border:1px solid ${st.color}; color:${st.color}" onchange="updateStatus(${b.id}, this.value)">
+          ${Object.entries(STATUS).map(([k,v]) => `<option value="${k}" ${k===b.status?'selected':''}>${v.label}</option>`).join('')}
+        </select>
+      </div>`;
+    wrap.appendChild(div);
+  });
+}
+
+function renderChart(initial) {
+  const sorted = [...state.bets].filter(b => b.status === 'win' || b.status === 'loss')
+    .sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id);
+  let running = initial;
+  const labels = ['Inicio'];
+  const data = [running];
+  sorted.forEach(b => {
+    running += b.status === 'win' ? americanToProfit(b.odds, b.stake) : -b.stake;
+    labels.push(b.date.slice(5));
+    data.push(Math.round(running));
+  });
+  const ctx = document.getElementById('bankChart');
+  if (state.chart) state.chart.destroy();
+  state.chart = new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets: [{
+      data, borderColor: '#16C784', backgroundColor: 'rgba(22,199,132,0.08)', fill: true,
+      tension: 0.3, pointRadius: 2.5, pointBackgroundColor: '#16C784', borderWidth: 2,
+    }]},
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => fmtMXN(c.parsed.y) } } },
+      scales: {
+        x: { ticks: { color: '#7A8593', font: { size: 10 } }, grid: { color: '#232B36' } },
+        y: { ticks: { color: '#7A8593', font: { size: 10 }, callback: v => '$'+(v/1000).toFixed(0)+'k' }, grid: { color: '#232B36' } },
+      }
+    }
+  });
+}
+
+function switchTab(tab) {
+  document.getElementById('tabLog').classList.toggle('active', tab==='log');
+  document.getElementById('tabChart').classList.toggle('active', tab==='chart');
+  document.getElementById('logView').style.display = tab==='log' ? 'block' : 'none';
+  document.getElementById('chartView').style.display = tab==='chart' ? 'block' : 'none';
+}
+
+function openForm() { document.getElementById('formOverlay').classList.add('open'); document.getElementById('formError').innerHTML=''; }
+function closeForm() { document.getElementById('formOverlay').classList.remove('open'); }
+function closeIfOverlay(e, id) { if (e.target.id === id) document.getElementById(id).classList.remove('open'); }
+
+function setStakeMode(mode) {
+  state.stakeMode = mode;
+  document.getElementById('mode_mxn').classList.toggle('active', mode==='mxn');
+  document.getElementById('mode_units').classList.toggle('active', mode==='units');
+  document.getElementById('f_stake').style.display = mode==='mxn' ? 'block' : 'none';
+  document.getElementById('f_units').style.display = mode==='units' ? 'block' : 'none';
+  updateUnitsHint();
+}
+function updateUnitsHint() {
+  const hint = document.getElementById('unitsHint');
+  if (state.stakeMode !== 'units') { hint.textContent = ''; return; }
+  const u = document.getElementById('f_units').value;
+  let txt = `1 unidad = ${state.config.unit_pct}% de tu banca actual = ${fmtMXN(state.unitValue || 0)}`;
+  if (u) txt += ` → apuesta ≈ ${fmtMXN(Number(u) * (state.unitValue||0))}`;
+  hint.textContent = txt;
+}
+document.getElementById('f_units').addEventListener('input', updateUnitsHint);
+
+async function submitBet(e) {
+  e.preventDefault();
+  const errBox = document.getElementById('formError');
+  errBox.innerHTML = '';
+  const body = {
+    date: document.getElementById('f_date').value,
+    sport: document.getElementById('f_sport').value,
+    matchup: document.getElementById('f_matchup').value,
+    pick: document.getElementById('f_pick').value,
+    odds: document.getElementById('f_odds').value,
+    note: document.getElementById('f_note').value,
+    status: 'pending',
+  };
+  if (state.stakeMode === 'units') {
+    const units = Number(document.getElementById('f_units').value);
+    if (!units) { errBox.innerHTML = '<div class="err-box">Escribe cuántas unidades apuestas.</div>'; return; }
+    body.units = units;
+    body.stake = Math.round(units * (state.unitValue || 0));
+  } else {
+    const stake = Number(document.getElementById('f_stake').value);
+    if (!stake) { errBox.innerHTML = '<div class="err-box">Escribe el monto en pesos.</div>'; return; }
+    body.stake = stake;
+    body.units = state.unitValue > 0 ? +(stake / state.unitValue).toFixed(2) : null;
+  }
+  const res = await fetch('/api/bets', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+  if (!res.ok) {
+    const err = await res.json();
+    errBox.innerHTML = `<div class="err-box">${err.error || 'No se pudo guardar la apuesta.'}</div>`;
+    return;
+  }
+  document.getElementById('betForm').reset();
+  document.getElementById('f_date').value = new Date().toISOString().slice(0,10);
+  closeForm();
+  await loadAll();
+}
+
+async function updateStatus(id, status) {
+  await fetch('/api/bets/'+id, { method: 'PATCH', headers: {'Content-Type':'application/json'}, body: JSON.stringify({status}) });
+  state.bets = await (await fetch('/api/bets')).json();
+  renderAll();
+}
+async function deleteBet(id) {
+  await fetch('/api/bets/'+id, { method: 'DELETE' });
+  state.bets = await (await fetch('/api/bets')).json();
+  renderAll();
+}
+
+function buildUnitPctGrid() {
+  const grid = document.getElementById('unitPctGrid');
+  grid.innerHTML = '';
+  UNIT_OPTIONS.forEach(pct => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = pct + '%';
+    b.dataset.pct = pct;
+    b.onclick = () => {
+      document.querySelectorAll('#unitPctGrid button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+    };
+    grid.appendChild(b);
+  });
+}
+function openSettings() {
+  document.getElementById('settingsError').innerHTML = '';
+  document.getElementById('s_initial').value = state.config.initial;
+  buildUnitPctGrid();
+  document.querySelectorAll('#unitPctGrid button').forEach(b => {
+    if (Number(b.dataset.pct) === state.config.unit_pct) b.classList.add('active');
+  });
+  document.getElementById('settingsOverlay').classList.add('open');
+}
+function closeSettings() { document.getElementById('settingsOverlay').classList.remove('open'); }
+
+async function submitSettings(e) {
+  e.preventDefault();
+  const errBox = document.getElementById('settingsError');
+  errBox.innerHTML = '';
+  const initialRaw = document.getElementById('s_initial').value;
+  const activeBtn = document.querySelector('#unitPctGrid button.active');
+  if (!activeBtn) { errBox.innerHTML = '<div class="err-box">Elige un % de unidad de la lista.</div>'; return; }
+  const res = await fetch('/api/config', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ initial: initialRaw, unit_pct: Number(activeBtn.dataset.pct) })
+  });
+  if (!res.ok) {
+    const err = await res.json();
+    errBox.innerHTML = `<div class="err-box">${err.error || 'No se pudo guardar.'}</div>`;
+    return;
+  }
+  state.config = await res.json();
+  closeSettings();
+  await renderAll();
+}
+
+// Register service worker for PWA install
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/static/sw.js').catch(() => {});
+}
+
+loadAll();
+</script>
+</body>
+</html>
